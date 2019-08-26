@@ -305,7 +305,7 @@ esp_err_t uart_get_hw_flow_ctrl(uart_port_t uart_num, uart_hw_flowcontrol_t* flo
     return ESP_OK;
 }
 
-static esp_err_t uart_reset_rx_fifo(uart_port_t uart_num)
+esp_err_t uart_reset_rx_fifo(uart_port_t uart_num)
 {
     UART_CHECK((uart_num < UART_NUM_MAX), "uart_num error", ESP_FAIL);
     //Due to hardware issue, we can not use fifo_rst to reset uart fifo.

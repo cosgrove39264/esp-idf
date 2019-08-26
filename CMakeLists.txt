@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
 project(esp-idf C CXX ASM)
 
+include(tools/cmake/idf.cmake)
+
 unset(compile_options)
 unset(c_compile_options)
 unset(cxx_compile_options)

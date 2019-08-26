@@ -1639,7 +1639,7 @@ int coap_dtls_hello(coap_session_t *c_session,
   int ret;
 
   if (m_env) {
-    char *str = get_ip_addr(&c_session->remote_addr);
+    char *str = get_ip_addr(&c_session->addr_info.remote);
     if (!str) {
       return -1;
     }
@@ -1661,7 +1661,7 @@ int coap_dtls_hello(coap_session_t *c_session,
       ssl_data = &m_env->coap_ssl_data;
       ssl_data->pdu = data;
       ssl_data->pdu_len = (unsigned)data_len;
-      char *str = get_ip_addr(&c_session->remote_addr);
+      char *str = get_ip_addr(&c_session->addr_info.remote);
       if (!str) {
         return -1;
       }
