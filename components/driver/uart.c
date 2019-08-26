@@ -1601,3 +1601,41 @@ esp_err_t uart_get_wakeup_threshold(uart_port_t uart_num, int* out_wakeup_thresh
     *out_wakeup_threshold = UART[uart_num]->sleep_conf.active_threshold + UART_MIN_WAKEUP_THRESH;
     return ESP_OK;
 }
+
+
+uint32_t uart_baud_detect(uart_port_t uart_num, uint32_t edge_to_wait)
+{
+    int low_period = 0;
+    int high_period = 0;
+    uint32_t intena_reg = UART[uart_num]->int_ena.val;
+    //Disable the interruput.
+    UART[uart_num]->int_ena.val = 0;
+    UART[uart_num]->int_clr.val = ~0;
+    //Filter
+    UART[uart_num]->auto_baud.glitch_filt = 2;
+    //Clear the previous result
+    UART[uart_num]->auto_baud.en = 0;
+    UART[uart_num]->rxd_cnt.edge_cnt=0;
+    UART[uart_num]->auto_baud.en = 1;
+    while(UART[uart_num]->rxd_cnt.edge_cnt < edge_to_wait) {
+       // vTaskDelay(pdMS_TO_TICKS(3));
+     //   printf("EC %d\n",UART[uart_num]->rxd_cnt.edge_cnt);
+        //ets_delay_us(10);
+    }
+    low_period = UART[uart_num]->lowpulse.min_cnt;
+    high_period = UART[uart_num]->highpulse.min_cnt;
+    // disable the baudrate detection
+    UART[uart_num]->auto_baud.en = 0;
+    //Reset the fifo;
+    //uart_reset_rx_fifo(uart_num);
+    UART[uart_num]->int_ena.val = intena_reg;
+    //Set the clock divider reg
+
+    //printf("AB: %d, %d \n",low_period,high_period);
+
+    UART[uart_num]->clk_div.div_int = (low_period > high_period) ? high_period : low_period;
+
+    //Return the divider. baud = APB / divider;
+    return (low_period > high_period) ? high_period : low_period;;
+}
+

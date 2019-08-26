@@ -841,6 +841,21 @@ esp_err_t uart_set_wakeup_threshold(uart_port_t uart_num, int wakeup_threshold);
  */
 esp_err_t uart_get_wakeup_threshold(uart_port_t uart_num, int* out_wakeup_threshold);
 
+/**
+ * @brief Resets the RX Fifo of an UART
+ *
+ * @param uart_num  UART number
+ *
+ * @return
+ *      - ESP_OK on success
+ *      - ESP_ERR_INVALID_ARG if out_wakeup_threshold is NULL
+ */
+static esp_err_t uart_reset_rx_fifo(uart_port_t uart_num);
+
+
+uint32_t uart_baud_detect(uart_port_t uart_num, uint32_t edges_to_wait);
+
+
 #ifdef __cplusplus
 }
 #endif
