@@ -6,71 +6,90 @@
 [submodule "components/esptool_py/esptool"]
 	path = components/esptool_py/esptool
 	url = ../../espressif/esptool.git
+    ignore = dirty
 
 [submodule "components/bt/controller/lib"]
 	path = components/bt/controller/lib
 	url = ../../espressif/esp32-bt-lib.git
+    ignore = dirty
 
 [submodule "components/bootloader/subproject/components/micro-ecc/micro-ecc"]
 	path = components/bootloader/subproject/components/micro-ecc/micro-ecc
 	url = ../../kmackay/micro-ecc.git
+    ignore = dirty
 
 [submodule "components/coap/libcoap"]
 	path = components/coap/libcoap
-	url = ../../obgm/libcoap.git
+	url = git@github.com:cosgrove39264/libcoap.git
+	branch = develop
+    ignore = dirty
 
 [submodule "components/nghttp/nghttp2"]
 	path = components/nghttp/nghttp2
 	url = ../../nghttp2/nghttp2.git
+    ignore = dirty
 
 [submodule "components/libsodium/libsodium"]
 	path = components/libsodium/libsodium
 	url = ../../jedisct1/libsodium.git
+    ignore = dirty
 
 [submodule "components/spiffs/spiffs"]
 	path = components/spiffs/spiffs
 	url = ../../pellepl/spiffs.git
+    ignore = dirty
 
 [submodule "components/json/cJSON"]
 	path = components/json/cJSON
 	url = ../../DaveGamble/cJSON.git
+    ignore = dirty
 
 [submodule "components/mbedtls/mbedtls"]
 	path = components/mbedtls/mbedtls
 	url = ../../espressif/mbedtls.git
+    ignore = dirty
 
 [submodule "components/asio/asio"]
 	path = components/asio/asio
 	url = ../../espressif/asio.git
+    ignore = dirty
 
 [submodule "components/expat/expat"]
 	path = components/expat/expat
 	url = ../../libexpat/libexpat.git
+    ignore = dirty
 
 [submodule "components/lwip/lwip"]
 	path = components/lwip/lwip
 	url = ../../espressif/esp-lwip.git
+    ignore = dirty
 
 [submodule "components/mqtt/esp-mqtt"]
 	path = components/mqtt/esp-mqtt
 	url = ../../espressif/esp-mqtt.git
+    ignore = dirty
 
 [submodule "components/protobuf-c/protobuf-c"]
 	path = components/protobuf-c/protobuf-c
 	url = ../../protobuf-c/protobuf-c.git
+    ignore = dirty
 
 [submodule "components/unity/unity"]
 	path = components/unity/unity
 	url = ../../ThrowTheSwitch/Unity.git
+    ignore = dirty
 
 [submodule "examples/build_system/cmake/import_lib/main/lib/tinyxml2"]
 	path = examples/build_system/cmake/import_lib/main/lib/tinyxml2
 	url = ../../leethomason/tinyxml2.git
+    ignore = dirty
 
 [submodule "components/esp_wifi/lib_esp32"]
 	path = components/esp_wifi/lib_esp32
 	url = ../../espressif/esp32-wifi-lib.git
+    ignore = dirty
 
 [submodule "components/bt/host/nimble/nimble"]
 	path = components/bt/host/nimble/nimble
 	url = ../../espressif/esp-nimble.git
+    ignore = dirty
