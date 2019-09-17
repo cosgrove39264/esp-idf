@@ -66,7 +66,7 @@ LOG_SUSPECTED=${LOG_PATH}/common_log.txt
 touch ${LOG_SUSPECTED}
 SDKCONFIG_DEFAULTS_CI=sdkconfig.ci
 
-EXAMPLE_PATHS=$( get_supported_examples.sh $IDF_TARGET | sed "s#^#${IDF_PATH}\/examples\/#g" | awk '{print $0"/CmakeLists.txt"}' )
+EXAMPLE_PATHS=$( get_supported_examples.sh $IDF_TARGET | sed "s#^#${IDF_PATH}\/examples\/#g" | awk '{print $0"/CMakeLists.txt"}' )
 NUM_OF_EXAMPLES=$( echo "${EXAMPLE_PATHS}" | wc -l )
 # just a plausibility check
 [ ${NUM_OF_EXAMPLES} -lt 100 ] && die "NUM_OF_EXAMPLES is bad"
