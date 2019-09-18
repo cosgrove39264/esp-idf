@@ -17577,7 +17577,7 @@ END GROUP
                 0x000000004008381c                spi_flash_read
                 0x0000000040083b3c                spi_flash_read_encrypted
                 0x0000000040083bac                spi_flash_write_encrypted
- *fill*         0x0000000040083d14        0x0 
+ *fill*         0x0000000040083d14        0x0
  .iram1         0x0000000040083d14      0x4ce /home/user/esp/esp-idf/tools/unit-test-app/build/spi_flash/libspi_flash.a(flash_mmap.o)
                                         0x4fe (size before relaxing)
                 0x0000000040083e40                spi_flash_mmap_pages
