@@ -17,6 +17,7 @@
 #include <stdbool.h>
 
 #include "osi/allocator.h"
+#include "osi/mutex.h"
 #include "sdkconfig.h"
 
 #include "mesh_types.h"
@@ -73,36 +74,50 @@ static const bt_mesh_client_op_pair_t time_scene_op_pair[] = {
     { BLE_MESH_MODEL_OP_SCHEDULER_ACT_SET,  BLE_MESH_MODEL_OP_SCHEDULER_ACT_STATUS  },
 };
 
+static osi_mutex_t time_scene_client_mutex;
+
+static void bt_mesh_time_scene_client_mutex_new(void)
+{
+    static bool init;
+
+    if (!init) {
+        osi_mutex_new(&time_scene_client_mutex);
+        init = true;
+    }
+}
+
+static void bt_mesh_time_scene_client_lock(void)
+{
+    osi_mutex_lock(&time_scene_client_mutex, OSI_MUTEX_MAX_TIMEOUT);
+}
+
+static void bt_mesh_time_scene_client_unlock(void)
+{
+    osi_mutex_unlock(&time_scene_client_mutex);
+}
+
 static void timeout_handler(struct k_work *work)
 {
-    time_scene_internal_data_t *internal = NULL;
-    bt_mesh_time_scene_client_t *client = NULL;
+    struct k_delayed_work *timer = NULL;
     bt_mesh_client_node_t *node = NULL;
 
     BT_WARN("Receive time scene status message timeout");
 
-    node = CONTAINER_OF(work, bt_mesh_client_node_t, timer.work);
-    if (!node || !node->ctx.model) {
-        BT_ERR("%s, Invalid parameter", __func__);
-        return;
+    bt_mesh_time_scene_client_lock();
+
+    timer = CONTAINER_OF(work, struct k_delayed_work, work);
+
+    if (timer && !k_delayed_work_free(timer)) {
+        node = CONTAINER_OF(work, bt_mesh_client_node_t, timer.work);
+        if (node) {
+            bt_mesh_time_scene_client_cb_evt_to_btc(node->opcode,
+                                                    BTC_BLE_MESH_EVT_TIME_SCENE_CLIENT_TIMEOUT, node->ctx.model, &node->ctx, NULL, 0);
+            // Don't forget to release the node at the end.
+            bt_mesh_client_free_node(node);
+        }
     }
 
-    client = (bt_mesh_time_scene_client_t *)node->ctx.model->user_data;
-    if (!client) {
-        BT_ERR("%s, Time Scene Client user_data is NULL", __func__);
-        return;
-    }
-
-    internal = (time_scene_internal_data_t *)client->internal_data;
-    if (!internal) {
-        BT_ERR("%s, Time Scene Client internal_data is NULL", __func__);
-        return;
-    }
-
-    bt_mesh_time_scene_client_cb_evt_to_btc(node->opcode,
-        BTC_BLE_MESH_EVT_TIME_SCENE_CLIENT_TIMEOUT, node->ctx.model, &node->ctx, NULL, 0);
-
-    bt_mesh_client_free_node(&internal->queue, node);
+    bt_mesh_time_scene_client_unlock();
 
     return;
 }
@@ -111,30 +126,14 @@ static void time_scene_status(struct bt_mesh_model *model,
                               struct bt_mesh_msg_ctx *ctx,
                               struct net_buf_simple *buf)
 {
-    time_scene_internal_data_t *internal = NULL;
-    bt_mesh_time_scene_client_t *client = NULL;
     bt_mesh_client_node_t *node = NULL;
-    u8_t  *val = NULL;
-    u8_t   evt = 0xFF;
-    u32_t  rsp = 0;
+    u8_t *val = NULL;
+    u8_t evt = 0xFF;
     size_t len = 0;
 
     BT_DBG("%s, len %d, bytes %s", __func__, buf->len, bt_hex(buf->data, buf->len));
 
-    client = (bt_mesh_time_scene_client_t *)model->user_data;
-    if (!client) {
-        BT_ERR("%s, Time Scene Client user_data is NULL", __func__);
-        return;
-    }
-
-    internal = (time_scene_internal_data_t *)client->internal_data;
-    if (!internal) {
-        BT_ERR("%s, Time Scene Client internal_data is NULL", __func__);
-        return;
-    }
-
-    rsp = ctx->recv_op;
-    switch (rsp) {
+    switch (ctx->recv_op) {
     case BLE_MESH_MODEL_OP_TIME_STATUS: {
         struct bt_mesh_time_status *status = NULL;
         if (buf->len != 5 && buf->len != 10) {
@@ -299,9 +298,12 @@ static void time_scene_status(struct bt_mesh_model *model,
 
     buf->data = val;
     buf->len = len;
+
+    bt_mesh_time_scene_client_lock();
+
     node = bt_mesh_is_client_recv_publish_msg(model, ctx, buf, true);
     if (!node) {
-        BT_DBG("Unexpected time scene status message 0x%x", rsp);
+        BT_DBG("Unexpected time scene status message 0x%x", ctx->recv_op);
     } else {
         switch (node->opcode) {
         case BLE_MESH_MODEL_OP_TIME_GET:
@@ -328,12 +330,16 @@ static void time_scene_status(struct bt_mesh_model *model,
             break;
         }
 
-        bt_mesh_time_scene_client_cb_evt_to_btc(node->opcode, evt, model, ctx, val, len);
-        // Don't forget to release the node at the end.
-        bt_mesh_client_free_node(&internal->queue, node);
+        if (!k_delayed_work_free(&node->timer)) {
+            bt_mesh_time_scene_client_cb_evt_to_btc(node->opcode, evt, model, ctx, val, len);
+            // Don't forget to release the node at the end.
+            bt_mesh_client_free_node(node);
+        }
     }
 
-    switch (rsp) {
+    bt_mesh_time_scene_client_unlock();
+
+    switch (ctx->recv_op) {
     case BLE_MESH_MODEL_OP_SCENE_REGISTER_STATUS: {
         struct bt_mesh_scene_register_status *status;
         status = (struct bt_mesh_scene_register_status *)val;
@@ -674,6 +680,8 @@ static int time_scene_client_init(struct bt_mesh_model *model, bool primary)
     client->op_pair_size = ARRAY_SIZE(time_scene_op_pair);
     client->op_pair = time_scene_op_pair;
     client->internal_data = internal;
+
+    bt_mesh_time_scene_client_mutex_new();
 
     return 0;
 }

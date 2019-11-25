@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef _MODEL_COMMON_H_
-#define _MODEL_COMMON_H_
+#ifndef _CLIENT_COMMON_H_
+#define _CLIENT_COMMON_H_
 
 #include "mesh_access.h"
 
@@ -78,6 +78,10 @@ typedef struct {
     void *cb_data;                      /* User defined callback value */
 } bt_mesh_client_common_param_t;
 
+void bt_mesh_client_model_lock(void);
+
+void bt_mesh_client_model_unlock(void);
+
 int bt_mesh_client_init(struct bt_mesh_model *model);
 
 /**
@@ -90,15 +94,9 @@ int bt_mesh_client_init(struct bt_mesh_model *model);
  * @return 0 on success, or (negative) error code on failure.
  */
 bt_mesh_client_node_t *bt_mesh_is_client_recv_publish_msg(
-        struct bt_mesh_model *model,
-        struct bt_mesh_msg_ctx *ctx,
-        struct net_buf_simple *buf, bool need_pub);
-
-bool bt_mesh_client_find_opcode_in_list(sys_slist_t *list, u32_t opcode);
-
-bool bt_mesh_client_check_node_in_list(sys_slist_t *list, uint16_t tx_dst);
-
-bt_mesh_client_node_t *bt_mesh_client_pick_node(sys_slist_t *list, u16_t tx_dst);
+    struct bt_mesh_model *model,
+    struct bt_mesh_msg_ctx *ctx,
+    struct net_buf_simple *buf, bool need_pub);
 
 int bt_mesh_client_send_msg(struct bt_mesh_model *model,
                             u32_t opcode,
@@ -108,7 +106,7 @@ int bt_mesh_client_send_msg(struct bt_mesh_model *model,
                             s32_t timeout, bool need_ack,
                             const struct bt_mesh_send_cb *cb, void *cb_data);
 
-int bt_mesh_client_free_node(sys_slist_t *queue, bt_mesh_client_node_t *node);
+int bt_mesh_client_free_node(bt_mesh_client_node_t *node);
 
 enum {
     NODE = 0,
@@ -132,5 +130,5 @@ typedef struct {
  */
 int bt_mesh_set_client_model_role(bt_mesh_role_param_t *common);
 
-#endif /* _MODEL_COMMON_H_ */
+#endif /* _CLIENT_COMMON_H_ */
 

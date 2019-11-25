@@ -16,6 +16,7 @@
 #include <errno.h>
 
 #include "osi/allocator.h"
+#include "osi/mutex.h"
 
 #include "mesh_access.h"
 #include "mesh_buf.h"
@@ -25,15 +26,32 @@
 #include "mesh.h"
 #include "client_common.h"
 
+static bt_mesh_client_node_t *bt_mesh_client_pick_node(sys_slist_t *list, u16_t tx_dst)
+{
+    if (sys_slist_is_empty(list)) {
+        return NULL;
+    }
+
+    sys_snode_t *cur = NULL; bt_mesh_client_node_t *node = NULL;
+    for (cur = sys_slist_peek_head(list);
+            cur != NULL; cur = sys_slist_peek_next(cur)) {
+        node = (bt_mesh_client_node_t *)cur;
+        if (node->ctx.addr == tx_dst) {
+            return node;
+        }
+    }
+
+    return NULL;
+}
+
 bt_mesh_client_node_t *bt_mesh_is_client_recv_publish_msg(
-        struct bt_mesh_model *model,
-        struct bt_mesh_msg_ctx *ctx,
-        struct net_buf_simple *buf, bool need_pub)
+    struct bt_mesh_model *model,
+    struct bt_mesh_msg_ctx *ctx,
+    struct net_buf_simple *buf, bool need_pub)
 {
     bt_mesh_client_internal_data_t *data = NULL;
     bt_mesh_client_user_data_t *cli = NULL;
     bt_mesh_client_node_t *node = NULL;
-    u32_t rsp;
 
     if (!model || !ctx || !buf) {
         BT_ERR("%s, Invalid parameter", __func__);
@@ -46,16 +64,14 @@ bt_mesh_client_node_t *bt_mesh_is_client_recv_publish_msg(
         return NULL;
     }
 
-    rsp = ctx->recv_op;
-
     /** If the received message address is not a unicast address,
      *  the address may be a group/virtual address, and we push
      *  this message to the application layer.
      */
     if (!BLE_MESH_ADDR_IS_UNICAST(ctx->recv_dst)) {
-        BT_DBG("Unexpected status message 0x%x", rsp);
+        BT_DBG("Unexpected status message 0x%x", ctx->recv_op);
         if (cli->publish_status && need_pub) {
-            cli->publish_status(rsp, model, ctx, buf);
+            cli->publish_status(ctx->recv_op, model, ctx, buf);
         }
         return NULL;
     }
@@ -72,17 +88,17 @@ bt_mesh_client_node_t *bt_mesh_is_client_recv_publish_msg(
     }
 
     if ((node = bt_mesh_client_pick_node(&data->queue, ctx->addr)) == NULL) {
-        BT_DBG("Unexpected status message 0x%x", rsp);
+        BT_DBG("Unexpected status message 0x%x", ctx->recv_op);
         if (cli->publish_status && need_pub) {
-            cli->publish_status(rsp, model, ctx, buf);
+            cli->publish_status(ctx->recv_op, model, ctx, buf);
         }
         return NULL;
     }
 
-    if (node->op_pending != rsp) {
-        BT_DBG("Unexpected status message 0x%x", rsp);
+    if (node->op_pending != ctx->recv_op) {
+        BT_DBG("Unexpected status message 0x%x", ctx->recv_op);
         if (cli->publish_status && need_pub) {
-            cli->publish_status(rsp, model, ctx, buf);
+            cli->publish_status(ctx->recv_op, model, ctx, buf);
         }
         return NULL;
     }
@@ -90,26 +106,7 @@ bt_mesh_client_node_t *bt_mesh_is_client_recv_publish_msg(
     return node;
 }
 
-bool bt_mesh_client_find_opcode_in_list(sys_slist_t *list, u32_t opcode)
-{
-    if (sys_slist_is_empty(list)) {
-        return false;
-    }
-
-    sys_snode_t *cur = NULL; bt_mesh_client_node_t *node = NULL;
-    for (cur = sys_slist_peek_head(list);
-            cur != NULL; cur = sys_slist_peek_next(cur)) {
-        node = (bt_mesh_client_node_t *)cur;
-        if (node->op_pending == opcode) {
-            return true;
-        }
-        return NULL;
-    }
-
-    return node;
-}
-
-bool bt_mesh_client_check_node_in_list(sys_slist_t *list, u16_t tx_dst)
+static bool bt_mesh_client_check_node_in_list(sys_slist_t *list, u16_t tx_dst)
 {
     if (sys_slist_is_empty(list)) {
         return false;
@@ -125,24 +122,6 @@ bool bt_mesh_client_check_node_in_list(sys_slist_t *list, u16_t tx_dst)
     }
 
     return false;
-}
-
-bt_mesh_client_node_t *bt_mesh_client_pick_node(sys_slist_t *list, u16_t tx_dst)
-{
-    if (sys_slist_is_empty(list)) {
-        return NULL;
-    }
-
-    sys_snode_t *cur = NULL; bt_mesh_client_node_t *node = NULL;
-    for (cur = sys_slist_peek_head(list);
-            cur != NULL; cur = sys_slist_peek_next(cur)) {
-        node = (bt_mesh_client_node_t *)cur;
-        if (node->ctx.addr == tx_dst) {
-            return node;
-        }
-    }
-
-    return NULL;
 }
 
 static u32_t bt_mesh_client_get_status_op(const bt_mesh_client_op_pair_t *op_pair,
@@ -222,6 +201,28 @@ int bt_mesh_client_send_msg(struct bt_mesh_model *model,
     return err;
 }
 
+static osi_mutex_t client_model_mutex;
+
+static void bt_mesh_client_model_mutex_new(void)
+{
+    static bool init;
+
+    if (!init) {
+        osi_mutex_new(&client_model_mutex);
+        init = true;
+    }
+}
+
+void bt_mesh_client_model_lock(void)
+{
+    osi_mutex_lock(&client_model_mutex, OSI_MUTEX_MAX_TIMEOUT);
+}
+
+void bt_mesh_client_model_unlock(void)
+{
+    osi_mutex_unlock(&client_model_mutex);
+}
+
 int bt_mesh_client_init(struct bt_mesh_model *model)
 {
     bt_mesh_client_internal_data_t *data = NULL;
@@ -256,19 +257,35 @@ int bt_mesh_client_init(struct bt_mesh_model *model)
     cli->model = model;
     cli->internal_data = data;
 
+    bt_mesh_client_model_mutex_new();
+
     return 0;
 }
 
-int bt_mesh_client_free_node(sys_slist_t *queue, bt_mesh_client_node_t *node)
+int bt_mesh_client_free_node(bt_mesh_client_node_t *node)
 {
-    if (!queue || !node) {
+    bt_mesh_client_internal_data_t *internal = NULL;
+    bt_mesh_client_user_data_t *client = NULL;
+
+    if (!node || !node->ctx.model) {
+        BT_ERR("%s, Client model list item is NULL", __func__);
         return -EINVAL;
     }
 
-    // Free the node timer
-    k_delayed_work_free(&node->timer);
+    client = (bt_mesh_client_user_data_t *)node->ctx.model->user_data;
+    if (!client) {
+        BT_ERR("%s, Client model user data is NULL", __func__);
+        return -EINVAL;
+    }
+
+    internal = (bt_mesh_client_internal_data_t *)client->internal_data;
+    if (!internal) {
+        BT_ERR("%s, Client model internal data is NULL", __func__);
+        return -EINVAL;
+    }
+
     // Release the client node from the queue
-    sys_slist_find_and_remove(queue, &node->client_node);
+    sys_slist_find_and_remove(&internal->queue, &node->client_node);
     // Free the node
     osi_free(node);
 
