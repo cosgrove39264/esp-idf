@@ -198,7 +198,7 @@ static esp_rom_spiflash_result_t IRAM_ATTR spi_flash_unlock()
     }
     return ESP_ROM_SPIFLASH_RESULT_OK;
 }
-#endif
+#endif // CONFIG_SPI_FLASH_USE_LEGACY_IMPL
 
 esp_err_t IRAM_ATTR spi_flash_erase_sector(size_t sec)
 {
@@ -419,7 +419,7 @@ out:
 
     return spi_flash_translate_rc(rc);
 }
-#endif
+#endif // CONFIG_SPI_FLASH_USE_LEGACY_IMPL
 
 esp_err_t IRAM_ATTR spi_flash_write_encrypted(size_t dest_addr, const void *src, size_t size)
 {
@@ -513,7 +513,17 @@ esp_err_t IRAM_ATTR spi_flash_read(size_t src, void *dstv, size_t size)
             goto out;
         }
         COUNTER_ADD_BYTES(read, read_size);
+#ifdef ESP_PLATFORM
+        if (esp_ptr_external_ram(dstv)) {
+            spi_flash_guard_end();
+            memcpy(dstv, ((uint8_t *) t) + left_off, size);
+            spi_flash_guard_start();
+        } else {
+            memcpy(dstv, ((uint8_t *) t) + left_off, size);
+        }
+#else
         memcpy(dstv, ((uint8_t *) t) + left_off, size);
+#endif
         goto out;
     }
     uint8_t *dstc = (uint8_t *) dstv;

@@ -196,6 +196,18 @@ example_test_007:
     - ESP32
     - Example_I2C_CCS811_SENSOR
 
+example_test_008:
+  extends: .example_test_template
+  tags:
+    - ESP32
+    - Example_Flash_Encryption
+
+example_test_009:
+  extends: .example_test_template
+  tags:
+    - ESP32
+    - Example_ExtFlash
+
 UT_001:
   extends: .unit_test_template
   parallel: 50
@@ -208,7 +220,7 @@ UT_001:
 
 UT_002:
   extends: .unit_test_template
-  parallel: 18
+  parallel: 30
   tags:
     - ESP32_IDF
     - UT_T1_1
@@ -407,10 +419,66 @@ UT_029:
 # Gitlab parallel max value is 50. We need to create another UT job if parallel is larger than 50.
 UT_030:
   extends: .unit_test_template
-  parallel: 6
+  parallel: 10
   tags:
     - ESP32_IDF
     - UT_T1_1
+
+UT_031:
+  extends: .unit_test_template
+  tags:
+    - ESP32_IDF
+    - UT_T1_FlashEncryption
+
+UT_032:
+  extends: .unit_test_template
+  parallel: 4
+  tags:
+    - ESP32_IDF
+    - UT_T2_Ethernet
+
+UT_033:
+  extends: .unit_test_template
+  tags:
+    - ESP32_IDF
+    - UT_T2_Ethernet
+    - psram
+
+UT_034:
+  extends: .unit_test_template
+  parallel: 2
+  tags:
+    - ESP32_IDF
+    - UT_T1_PSRAMV0
+    - psram
+
+UT_035:
+  extends: .unit_test_template
+  parallel: 3
+  tags:
+    - ESP32_IDF
+    - UT_T1_no32kXTAL
+
+UT_036:
+  extends: .unit_test_template
+  tags:
+    - ESP32_IDF
+    - UT_T1_no32kXTAL
+    - psram
+
+UT_037:
+  extends: .unit_test_template
+  parallel: 3
+  tags:
+    - ESP32_IDF
+    - UT_T1_32kXTAL
+
+UT_038:
+  extends: .unit_test_template
+  tags:
+    - ESP32_IDF
+    - UT_T1_32kXTAL
+    - psram
 
 nvs_compatible_test:
   extends: .test_template

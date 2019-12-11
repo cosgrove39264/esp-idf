@@ -543,7 +543,7 @@ esp_err_t esp_wifi_get_bandwidth(wifi_interface_t ifx, wifi_bandwidth_t *bw);
   * @brief     Set primary/secondary channel of ESP32
   *
   * @attention 1. This is a special API for sniffer
-  * @attention 2. This API should be called after esp_wifi_start() or esp_wifi_set_promiscuous()
+  * @attention 2. This API should be called after esp_wifi_start() and esp_wifi_set_promiscuous()
   *
   * @param     primary  for HT20, primary is the channel number, for HT40, primary is the primary channel
   * @param     second   for HT20, second is ignored, for HT40, second is the second channel
@@ -812,32 +812,6 @@ esp_err_t esp_wifi_ap_get_sta_list(wifi_sta_list_t *sta);
   *   - ESP_ERR_INVALID_ARG: invalid argument
   */
 esp_err_t esp_wifi_set_storage(wifi_storage_t storage);
-
-/**
-  * @brief     Set auto connect
-  *            The default value is true
-  *
-  * @param     en : true - enable auto connect / false - disable auto connect
-  *
-  * @return
-  *    - ESP_OK: succeed
-  *    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init
-  *    - ESP_ERR_WIFI_MODE: WiFi internal error, the station/soft-AP control block is invalid
-  *    - others: refer to error code in esp_err.h
-  */
-esp_err_t esp_wifi_set_auto_connect(bool en) __attribute__ ((deprecated));
-
-/**
-  * @brief     Get the auto connect flag
-  *
-  * @param[out] en  store current auto connect configuration
-  *
-  * @return
-  *    - ESP_OK: succeed
-  *    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init
-  *    - ESP_ERR_INVALID_ARG: invalid argument
-  */
-esp_err_t esp_wifi_get_auto_connect(bool *en) __attribute__ ((deprecated));
 
 /**
   * @brief     Function signature for received Vendor-Specific Information Element callback.

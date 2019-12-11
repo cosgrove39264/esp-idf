@@ -203,7 +203,8 @@ extern void btdm_controller_enable_sleep(bool enable);
 extern void btdm_controller_set_sleep_mode(uint8_t mode);
 extern uint8_t btdm_controller_get_sleep_mode(void);
 extern bool btdm_power_state_active(void);
-extern void btdm_wakeup_request(void);
+extern void btdm_wakeup_request(bool request_lock);
+extern void btdm_wakeup_request_end(void);
 /* Low Power Clock */
 extern bool btdm_lpclk_select_src(uint32_t sel);
 extern bool btdm_lpclk_set_div(uint32_t div);
@@ -224,6 +225,7 @@ extern int coex_bt_release_wrapper(uint32_t event);
 extern int coex_register_bt_cb_wrapper(coex_func_cb_t cb);
 extern uint32_t coex_bb_reset_lock_wrapper(void);
 extern void coex_bb_reset_unlock_wrapper(uint32_t restore);
+extern void coex_ble_adv_priority_high_set(bool high);
 
 extern char _bss_start_btdm;
 extern char _bss_end_btdm;
@@ -740,7 +742,7 @@ static void task_delete_wrapper(void *task_handle)
 
 static bool IRAM_ATTR is_in_isr_wrapper(void)
 {
-    return (bool)xPortInIsrContext();
+    return !xPortCanYield();
 }
 
 static void IRAM_ATTR cause_sw_intr(void *arg)
@@ -765,7 +767,7 @@ static int IRAM_ATTR cause_sw_intr_to_core_wrapper(int core_id, int intr_no)
 
 static void *malloc_internal_wrapper(size_t size)
 {
-    return heap_caps_malloc(size, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL);
+    return heap_caps_malloc(size, MALLOC_CAP_8BIT|MALLOC_CAP_DMA|MALLOC_CAP_INTERNAL);
 }
 
 static int32_t IRAM_ATTR read_mac_wrapper(uint8_t mac[6])
@@ -893,6 +895,8 @@ bool esp_vhci_host_check_send_available(void)
 
 void esp_vhci_host_send_packet(uint8_t *data, uint16_t len)
 {
+    bool do_wakeup_request = false;
+
     if (!btdm_power_state_active()) {
 #if CONFIG_PM_ENABLE
         if (semphr_take_wrapper(s_pm_lock_sem, 0)) {
@@ -900,9 +904,15 @@ void esp_vhci_host_send_packet(uint8_t *data, uint16_t len)
         }
         esp_timer_stop(s_btdm_slp_tmr);
 #endif
-        btdm_wakeup_request();
+        do_wakeup_request = true;
+        btdm_wakeup_request(true);
     }
+
     API_vhci_host_send_packet(data, len);
+
+    if (do_wakeup_request) {
+        btdm_wakeup_request_end();
+    }
 }
 
 esp_err_t esp_vhci_host_register_callback(const esp_vhci_host_callback_t *callback)
@@ -1182,6 +1192,12 @@ esp_err_t esp_bt_controller_init(esp_bt_controller_config_t *cfg)
         goto error;
     }
 
+    #ifdef CONFIG_BTDM_COEX_BLE_ADV_HIGH_PRIORITY
+        coex_ble_adv_priority_high_set(true);
+    #else
+        coex_ble_adv_priority_high_set(false);
+    #endif
+
     btdm_controller_status = ESP_BT_CONTROLLER_STATUS_INITED;
 
     return ESP_OK;
@@ -1328,7 +1344,7 @@ esp_err_t esp_bt_controller_disable(void)
     if (btdm_controller_get_sleep_mode() == BTDM_MODEM_SLEEP_MODE_ORIG) {
         btdm_controller_enable_sleep(false);
         if (!btdm_power_state_active()) {
-            btdm_wakeup_request();
+            btdm_wakeup_request(false);
         }
         while (!btdm_power_state_active()) {
             ets_delay_us(1000);
@@ -1466,7 +1482,7 @@ void esp_bt_controller_wakeup_request(void)
         return;
     }
 
-    btdm_wakeup_request();
+    btdm_wakeup_request(false);
 }
 
 esp_err_t esp_bredr_sco_datapath_set(esp_sco_data_path_t data_path)

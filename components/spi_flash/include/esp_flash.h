@@ -45,6 +45,9 @@ typedef struct {
     /** Called after completing any flash operation. */
     esp_err_t (*end)(void *arg);
 
+    /** Called before any erase/write operations to check whether the region is limited by the OS */
+    esp_err_t (*region_protected)(void* arg, size_t start_addr, size_t size);
+
     /** Delay for at least 'ms' milliseconds. Called in between 'start' and 'end'. */
     esp_err_t (*delay_ms)(void *arg, unsigned ms);
 } esp_flash_os_functions_t;
@@ -160,8 +163,6 @@ esp_err_t esp_flash_get_chip_write_protect(esp_flash_t *chip, bool *write_protec
  * @note Correct behaviour of this function depends on the SPI flash chip model and chip_drv in use (via the 'chip->drv'
  * field).
  *
- * If write protection is enabled, destructive operations will fail with ESP_ERR_FLASH_PROTECTED.
- *
  * Some SPI flash chips may require a power cycle before write protect status can be cleared. Otherwise,
  * write protection can be removed via a follow-up call to this function.
  *
@@ -249,50 +250,40 @@ esp_err_t esp_flash_write(esp_flash_t *chip, const void *buffer, uint32_t addres
 
 /** @brief Encrypted and write data to the SPI flash chip using on-chip hardware flash encryption
  *
- * @param chip Pointer to identify flash chip. Must have been successfully initialised via esp_flash_init()
+ * @param chip Pointer to identify flash chip. Must be NULL (the main flash chip). For other chips, encrypted write is not supported.
  * @param address Address on flash to write to. 16 byte aligned. Must be previously erased (SPI NOR flash can only write bits 1->0).
  * @param buffer Pointer to a buffer with the data to write.
  * @param length Length (in bytes) of data to write. 16 byte aligned.
  *
  * @note Both address & length must be 16 byte aligned, as this is the encryption block size
  *
- * @return ESP_OK on success, or a flash error code if operation failed.
+ * @return
+ *  - ESP_OK: on success
+ *  - ESP_ERR_NOT_SUPPORTED: encrypted write not supported for this chip.
+ *  - ESP_ERR_INVALID_ARG: Either the address, buffer or length is invalid.
+ *  - or other flash error code from spi_flash_write_encrypted().
  */
 esp_err_t esp_flash_write_encrypted(esp_flash_t *chip, uint32_t address, const void *buffer, uint32_t length);
 
+/** @brief Read and decrypt data from the SPI flash chip using on-chip hardware flash encryption
+ *
+ * @param chip Pointer to identify flash chip. Must be NULL (the main flash chip). For other chips, encrypted read is not supported.
+ * @param address Address on flash to read from.
+ * @param out_buffer Pointer to a buffer for the data to read to.
+ * @param length Length (in bytes) of data to read.
+ *
+ * @return
+ *  - ESP_OK: on success
+ *  - ESP_ERR_NOT_SUPPORTED: encrypted read not supported for this chip.
+ *  - or other flash error code from spi_flash_read_encrypted().
+ */
+esp_err_t esp_flash_read_encrypted(esp_flash_t *chip, uint32_t address, void *out_buffer, uint32_t length);
 
 /** @brief Pointer to the "default" SPI flash chip, ie the main chip attached to the MCU.
 
    This chip is used if the 'chip' argument pass to esp_flash_xxx API functions is ever NULL.
 */
 extern esp_flash_t *esp_flash_default_chip;
-
-/** @brief Initialise the default SPI flash chip
- *
- * Called by OS startup code. You do not need to call this in your own applications.
- */
-esp_err_t esp_flash_init_default_chip();
-
-/**
- *  Enable OS-level SPI flash protections in IDF
- *
- *  Called by OS startup code. You do not need to call this in your own applications.
- *
- * @return ESP_OK if success, otherwise failed. See return value of ``esp_flash_init_os_functions``.
- */
-esp_err_t esp_flash_app_init();
-
-/**
- *  Enable OS-level SPI flash for a specific chip.
- *
- * @param chip The chip to init os functions.
- * @param host_id Which SPI host to use, 1 for SPI1, 2 for SPI2 (HSPI), 3 for SPI3 (VSPI)
- *
- * @return
- *      - ESP_OK if success
- *      - ESP_ERR_INVALID_ARG if host_id is invalid
- */
-esp_err_t esp_flash_init_os_functions(esp_flash_t *chip, int host_id);
 
 
 #ifdef __cplusplus

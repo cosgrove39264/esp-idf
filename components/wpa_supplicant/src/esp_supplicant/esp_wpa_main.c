@@ -29,7 +29,6 @@
 #include "crypto/crypto.h"
 #include "crypto/sha1.h"
 #include "crypto/aes_wrap.h"
-#include "crypto/wepkey.h"
 
 #include "esp_wifi_driver.h"
 #include "esp_private/wifi.h"
@@ -233,7 +232,7 @@ int esp_supplicant_init(void)
     return ESP_OK;
 }
 
-bool  wpa_hook_deinit(void)
+int esp_supplicant_deinit(void)
 {
     return esp_wifi_unregister_wpa_cb_internal();
 }

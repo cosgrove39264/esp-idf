@@ -524,9 +524,20 @@ def get_default_serial_port():
 
 
 class PropertyDict(dict):
-    def __init__(self, *args, **kwargs):
-        super(PropertyDict, self).__init__(*args, **kwargs)
-        self.__dict__ = self
+    def __getattr__(self, name):
+        if name in self:
+            return self[name]
+        else:
+            raise AttributeError("'PropertyDict' object has no attribute '%s'" % name)
+
+    def __setattr__(self, name, value):
+        self[name] = value
+
+    def __delattr__(self, name):
+        if name in self:
+            del self[name]
+        else:
+            raise AttributeError("'PropertyDict' object has no attribute '%s'" % name)
 
 
 def init_cli():
@@ -1282,13 +1293,18 @@ if __name__ == "__main__":
         if ("MSYSTEM" in os.environ) and (
             not os.environ.get("_", "").endswith(WINPTY_EXE) and WINPTY_VAR not in os.environ
         ):
-            os.environ[WINPTY_VAR] = "1"  # the value is of no interest to us
-            # idf.py calls itself with "winpty" and WINPTY global variable set
-            ret = subprocess.call(
-                [WINPTY_EXE, sys.executable] + sys.argv, env=os.environ
-            )
-            if ret:
-                raise SystemExit(ret)
+
+            if 'menuconfig' in sys.argv:
+                # don't use winpty for menuconfig because it will print weird characters
+                main()
+            else:
+                os.environ[WINPTY_VAR] = "1"  # the value is of no interest to us
+                # idf.py calls itself with "winpty" and WINPTY global variable set
+                ret = subprocess.call(
+                    [WINPTY_EXE, sys.executable] + sys.argv, env=os.environ
+                )
+                if ret:
+                    raise SystemExit(ret)
 
         elif os.name == "posix" and not _valid_unicode_config():
             # Trying to find best utf-8 locale available on the system and restart python with it

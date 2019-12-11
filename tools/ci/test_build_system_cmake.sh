@@ -362,6 +362,19 @@ function run_tests()
     rm sdkconfig;
     rm sdkconfig.defaults;
 
+    print_status "can build with ethernet component disabled"
+    idf.py clean > /dev/null;
+    idf.py fullclean > /dev/null;
+    rm -f sdkconfig.defaults;
+    rm -f sdkconfig;
+    echo "CONFIG_ETH_USE_SPI_ETHERNET=" >> sdkconfig.defaults;
+    echo "CONFIG_ETH_USE_ESP32_EMAC=" >> sdkconfig.defaults;
+    idf.py reconfigure > /dev/null;
+    idf.py build || failure "Failed to build with ethernet component disabled"
+    assert_built ${APP_BINS} ${BOOTLOADER_BINS} ${PARTITION_BIN}
+    rm sdkconfig;
+    rm sdkconfig.defaults;
+
     print_status "Building a project with CMake library imported and PSRAM workaround, all files compile with workaround"
     # Test for libraries compiled within ESP-IDF
     rm -rf build
@@ -421,6 +434,28 @@ endmenu\n" >> ${IDF_PATH}/Kconfig;
     grep "set(CONFIG_TEST_OLD_OPTION \"y\")" build/config/sdkconfig.cmake || failure "CONFIG_TEST_OLD_OPTION should be in auto.conf for backward compatibility"
     grep "set(CONFIG_TEST_NEW_OPTION \"y\")" build/config/sdkconfig.cmake || failure "CONFIG_TEST_NEW_OPTION should be now in auto.conf"
     rm -f sdkconfig sdkconfig.defaults
+    pushd ${IDF_PATH}
+    git checkout -- sdkconfig.rename Kconfig
+    popd
+
+    print_status "Handling deprecated Kconfig options in sdkconfig.defaults"
+    idf.py clean;
+    rm -f sdkconfig;
+    echo "CONFIG_TEST_OLD_OPTION=7" > sdkconfig.defaults;
+    echo "CONFIG_TEST_OLD_OPTION CONFIG_TEST_NEW_OPTION" > ${IDF_PATH}/sdkconfig.rename;
+    echo -e "\n\
+menu \"test\"\n\
+    config TEST_NEW_OPTION\n\
+        int \"TEST_NEW_OPTION\"\n\
+        range 0 10\n\
+        default 5\n\
+        help\n\
+            TEST_NEW_OPTION description\n\
+endmenu\n" >> ${IDF_PATH}/Kconfig;
+    idf.py build > /dev/null;
+    grep "CONFIG_TEST_OLD_OPTION=7" sdkconfig || failure "CONFIG_TEST_OLD_OPTION=7 should be in sdkconfig for backward compatibility"
+    grep "CONFIG_TEST_NEW_OPTION=7" sdkconfig || failure "CONFIG_TEST_NEW_OPTION=7 should be in sdkconfig"
+    rm -f sdkconfig.defaults;
     pushd ${IDF_PATH}
     git checkout -- sdkconfig.rename Kconfig
     popd
@@ -510,6 +545,22 @@ endmenu\n" >> ${IDF_PATH}/Kconfig;
     mv CMakeLists.txt.bak CMakeLists.txt
     rm -rf CMakeLists.txt.bak
 
+    print_status "Component properties are set"
+    clean_build_dir
+    cp CMakeLists.txt CMakeLists.txt.bak
+    printf "\nidf_component_get_property(srcs main SRCS)\nmessage(STATUS SRCS:\${srcs})" >> CMakeLists.txt
+    (idf.py reconfigure | grep "SRCS:$(realpath main/main.c)") || failure "Component properties should be set"
+    rm -rf CMakeLists.txt
+    mv CMakeLists.txt.bak CMakeLists.txt
+    rm -rf CMakeLists.txt.bak
+
+    print_status "Supports git worktree"
+    clean_build_dir
+    git branch test_build_system
+    git worktree add ../esp-idf-template-test test_build_system
+    diff <(idf.py reconfigure | grep "Project version") <(cd ../esp-idf-template-test && idf.py reconfigure | grep "Project version") \
+        || failure "Version on worktree should have been properly resolved"
+    git worktree remove ../esp-idf-template-test
 
     print_status "All tests completed"
     if [ -n "${FAILURES}" ]; then

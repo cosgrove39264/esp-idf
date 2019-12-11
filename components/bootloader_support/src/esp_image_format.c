@@ -24,6 +24,7 @@
 #include <bootloader_random.h>
 #include <bootloader_sha.h>
 #include "bootloader_util.h"
+#include "bootloader_common.h"
 
 /* Checking signatures as part of verifying images is necessary:
    - Always if secure boot is enabled
@@ -268,8 +269,6 @@ esp_err_t esp_image_verify(esp_image_load_mode_t mode, const esp_partition_pos_t
     return image_load(mode, part, data);
 }
 
-esp_err_t esp_image_load(esp_image_load_mode_t mode, const esp_partition_pos_t *part, esp_image_metadata_t *data) __attribute__((alias("esp_image_verify")));
-
 static esp_err_t verify_image_header(uint32_t src_addr, const esp_image_header_t *image, bool silent)
 {
     esp_err_t err = ESP_OK;
@@ -278,6 +277,9 @@ static esp_err_t verify_image_header(uint32_t src_addr, const esp_image_header_t
         if (!silent) {
             ESP_LOGE(TAG, "image at 0x%x has invalid magic byte", src_addr);
         }
+        err = ESP_ERR_IMAGE_INVALID;
+    }
+    if (bootloader_common_check_chip_validity(image, ESP_IMAGE_APPLICATION) != ESP_OK) {
         err = ESP_ERR_IMAGE_INVALID;
     }
     if (!silent) {

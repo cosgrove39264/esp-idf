@@ -29,6 +29,10 @@ mainmenu "Espressif IoT Development Framework Configuration"
         default "IDF_TARGET_NOT_SET" if IDF_TARGET_ENV=""
         default IDF_TARGET_ENV
 
+    config IDF_FIRMWARE_CHIP_ID
+        hex
+        default 0x0000 if IDF_TARGET="esp32"
+        default 0xFFFF
 
     menu "SDK tool configuration"
         config SDK_TOOLPREFIX
@@ -144,6 +148,15 @@ mainmenu "Espressif IoT Development Framework Configuration"
             help
                 Size (in bytes) of the emergency memory pool for C++ exceptions. This pool will be used to allocate
                 memory for thrown exceptions when there is not enough memory on the heap.
+
+        config COMPILER_CXX_RTTI
+            # Invisible option, until the toolchain with RTTI support is released.
+            # Use prompt "Enable C++ run-time type info (RTTI)" when updating.
+            bool
+            help
+                Enabling this option compiles all C++ files with RTTI support enabled.
+                This increases binary size (typically by tens of kB) but allows using
+                dynamic_cast conversion and typeid operator.
 
         choice COMPILER_STACK_CHECK_MODE
             prompt "Stack smashing protection mode"

@@ -22,7 +22,6 @@
 # limitations under the License.
 from __future__ import print_function
 import argparse
-import fnmatch
 import json
 import os
 import os.path
@@ -31,7 +30,12 @@ import sys
 import tempfile
 
 import gen_kconfig_doc
-import kconfiglib
+
+try:
+    from . import kconfiglib
+except Exception:
+    sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+    import kconfiglib
 
 __version__ = "0.1"
 
@@ -46,15 +50,15 @@ class DeprecatedOptions(object):
     _RE_DEP_OP_BEGIN = re.compile(_DEP_OP_BEGIN)
     _RE_DEP_OP_END = re.compile(_DEP_OP_END)
 
-    def __init__(self, config_prefix, path_rename_files, ignore_dirs=()):
+    def __init__(self, config_prefix, path_rename_files=[]):
         self.config_prefix = config_prefix
         # r_dic maps deprecated options to new options; rev_r_dic maps in the opposite direction
-        self.r_dic, self.rev_r_dic = self._parse_replacements(path_rename_files, ignore_dirs)
+        self.r_dic, self.rev_r_dic = self._parse_replacements(path_rename_files)
 
         # note the '=' at the end of regex for not getting partial match of configs
         self._RE_CONFIG = re.compile(r'{}(\w+)='.format(self.config_prefix))
 
-    def _parse_replacements(self, repl_dir, ignore_dirs):
+    def _parse_replacements(self, repl_paths):
         rep_dic = {}
         rev_rep_dic = {}
 
@@ -64,31 +68,24 @@ class DeprecatedOptions(object):
             raise RuntimeError('Error in {} (line {}): Config {} is not prefixed with {}'
                                ''.format(rep_path, line_number, string, self.config_prefix))
 
-        for root, dirnames, filenames in os.walk(repl_dir):
-            for filename in fnmatch.filter(filenames, self._REN_FILE):
-                rep_path = os.path.join(root, filename)
+        for rep_path in repl_paths:
+            with open(rep_path) as f_rep:
+                for line_number, line in enumerate(f_rep, start=1):
+                    sp_line = line.split()
+                    if len(sp_line) == 0 or sp_line[0].startswith('#'):
+                        # empty line or comment
+                        continue
+                    if len(sp_line) != 2 or not all(x.startswith(self.config_prefix) for x in sp_line):
+                        raise RuntimeError('Syntax error in {} (line {})'.format(rep_path, line_number))
+                    if sp_line[0] in rep_dic:
+                        raise RuntimeError('Error in {} (line {}): Replacement {} exist for {} and new '
+                                           'replacement {} is defined'.format(rep_path, line_number,
+                                                                              rep_dic[sp_line[0]], sp_line[0],
+                                                                              sp_line[1]))
 
-                if rep_path.startswith(ignore_dirs):
-                    print('Ignoring: {}'.format(rep_path))
-                    continue
-
-                with open(rep_path) as f_rep:
-                    for line_number, line in enumerate(f_rep, start=1):
-                        sp_line = line.split()
-                        if len(sp_line) == 0 or sp_line[0].startswith('#'):
-                            # empty line or comment
-                            continue
-                        if len(sp_line) != 2 or not all(x.startswith(self.config_prefix) for x in sp_line):
-                            raise RuntimeError('Syntax error in {} (line {})'.format(rep_path, line_number))
-                        if sp_line[0] in rep_dic:
-                            raise RuntimeError('Error in {} (line {}): Replacement {} exist for {} and new '
-                                               'replacement {} is defined'.format(rep_path, line_number,
-                                                                                  rep_dic[sp_line[0]], sp_line[0],
-                                                                                  sp_line[1]))
-
-                        (dep_opt, new_opt) = (remove_config_prefix(x) for x in sp_line)
-                        rep_dic[dep_opt] = new_opt
-                        rev_rep_dic[new_opt] = dep_opt
+                    (dep_opt, new_opt) = (remove_config_prefix(x) for x in sp_line)
+                    rep_dic[dep_opt] = new_opt
+                    rev_rep_dic[new_opt] = dep_opt
         return rep_dic, rev_rep_dic
 
     def get_deprecated_option(self, new_option):
@@ -190,6 +187,10 @@ def main():
                         help='KConfig file with config item definitions',
                         required=True)
 
+    parser.add_argument('--sdkconfig-rename',
+                        help='File with deprecated Kconfig options',
+                        required=False)
+
     parser.add_argument('--output', nargs=2, action='append',
                         help='Write output file (format and output filename)',
                         metavar=('FORMAT', 'FILENAME'),
@@ -226,6 +227,10 @@ def main():
     config.disable_redun_warnings()
     config.disable_override_warnings()
 
+    sdkconfig_renames = [args.sdkconfig_rename] if args.sdkconfig_rename else []
+    sdkconfig_renames += os.environ.get("COMPONENT_SDKCONFIG_RENAMES", "").split()
+    deprecated_options = DeprecatedOptions(config.config_prefix, path_rename_files=sdkconfig_renames)
+
     if len(args.defaults) > 0:
         # always load defaults first, so any items which are not defined in that config
         # will have the default defined in the defaults file
@@ -233,12 +238,16 @@ def main():
             print("Loading defaults file %s..." % name)
             if not os.path.exists(name):
                 raise RuntimeError("Defaults file not found: %s" % name)
-            config.load_config(name, replace=False)
-
-    # don't collect rename options from examples because those are separate projects and no need to "stay compatible"
-    # with example projects
-    deprecated_options = DeprecatedOptions(config.config_prefix, path_rename_files=os.environ["IDF_PATH"],
-                                           ignore_dirs=(os.path.join(os.environ["IDF_PATH"], 'examples')))
+            try:
+                with tempfile.NamedTemporaryFile(prefix="confgen_tmp", delete=False) as f:
+                    temp_file = f.name
+                deprecated_options.replace(sdkconfig_in=name, sdkconfig_out=temp_file)
+                config.load_config(temp_file, replace=False)
+            finally:
+                try:
+                    os.remove(temp_file)
+                except OSError:
+                    pass
 
     # If config file previously exists, load it
     if args.config and os.path.exists(args.config):

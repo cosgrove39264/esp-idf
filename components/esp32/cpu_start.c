@@ -43,7 +43,7 @@
 #include "sdkconfig.h"
 #include "esp_system.h"
 #include "esp_spi_flash.h"
-#include "esp_flash.h"
+#include "esp_flash_internal.h"
 #include "nvs_flash.h"
 #include "esp_event.h"
 #include "esp_spi_flash.h"
@@ -205,18 +205,9 @@ void IRAM_ATTR call_start_cpu0()
     }
     ESP_EARLY_LOGI(TAG, "Starting app cpu, entry point is %p", call_start_cpu1);
 
-    esp_flash_enc_mode_t mode;
-    mode = esp_get_flash_encryption_mode();
-    if (mode == ESP_FLASH_ENC_MODE_DEVELOPMENT) {
-#ifdef CONFIG_SECURE_FLASH_ENCRYPTION_MODE_RELEASE
-        ESP_EARLY_LOGE(TAG, "Flash encryption settings error: mode should be RELEASE but is actually DEVELOPMENT");
-        ESP_EARLY_LOGE(TAG, "Mismatch found in security options in menuconfig and efuse settings");
-#else
-        ESP_EARLY_LOGW(TAG, "Flash encryption mode is DEVELOPMENT");
+#ifdef CONFIG_SECURE_FLASH_ENC_ENABLED
+    esp_flash_encryption_init_checks();
 #endif
-    } else if (mode == ESP_FLASH_ENC_MODE_RELEASE) {
-        ESP_EARLY_LOGI(TAG, "Flash encryption mode is RELEASE");
-    }
 
     //Flush and enable icache for APP CPU
     Cache_Flush(1);
@@ -409,15 +400,6 @@ void start_cpu0_default(void)
     esp_err_t flash_ret = esp_flash_init_default_chip();
     assert(flash_ret == ESP_OK);
 
-    uint8_t revision = esp_efuse_get_chip_ver();
-    ESP_LOGI(TAG, "Chip Revision: %d", revision);
-    if (revision > CONFIG_ESP32_REV_MIN) {
-        ESP_LOGW(TAG, "Chip revision is higher than the one configured in menuconfig. Suggest to upgrade it.");
-    } else if(revision != CONFIG_ESP32_REV_MIN) {
-        ESP_LOGE(TAG, "ESP-IDF can't support this chip revision. Modify minimum supported revision in menuconfig");
-        abort();
-    }
-
 #ifdef CONFIG_PM_ENABLE
     esp_pm_impl_init();
 #ifdef CONFIG_PM_DFS_INIT_AUTO
@@ -444,10 +426,13 @@ void start_cpu0_default(void)
 #endif
 
     bootloader_flash_update_id();
-#if !CONFIG_SPIRAM_BOOT_INIT  // If psram is uninitialized, we need to improve some flash configuration.
-    esp_image_header_t fhdr;
-    const esp_partition_t *partition = esp_ota_get_running_partition();
-    spi_flash_read(partition->address, &fhdr, sizeof(esp_image_header_t));
+#if !CONFIG_SPIRAM_BOOT_INIT
+    // Read the application binary image header. This will also decrypt the header if the image is encrypted.
+    esp_image_header_t fhdr = {0};
+    // This assumes that DROM is the first segment in the application binary, i.e. that we can read
+    // the binary header through cache by accessing SOC_DROM_LOW address.
+    memcpy(&fhdr, (void*) SOC_DROM_LOW, sizeof(fhdr));
+    // If psram is uninitialized, we need to improve some flash configuration.
     bootloader_flash_clock_config(&fhdr);
     bootloader_flash_gpio_config(&fhdr);
     bootloader_flash_dummy_config(&fhdr);
